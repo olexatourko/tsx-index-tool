@@ -2,11 +2,11 @@ import pandas
 import os
 import loaders
 import web
+import argparse
 
-if __name__ == '__main__':
+def build_low_volatility_index():
     listings_df = loaders.get_preprocessed_listings_df()
-
-    df = pandas.DataFrame(columns=['symbol'])
+    index_df = df = pandas.DataFrame(columns=['symbol'])
     for row in listings_df.itertuples():
         symbol = web.format_symbol_for_alphavantage(row.Ticker)
 
@@ -24,7 +24,7 @@ if __name__ == '__main__':
         prices['20 day change'] = prices['adjusted close'].diff(periods=20) # 1 month
         prices['60 day change'] = prices['adjusted close'].diff(periods=20)  # 6 month
 
-        df = df.append({
+        index_df = index_df.append({
             'symbol': symbol,
             'daily variance': prices['1 day change'].var(),
             'weekly variance': prices['5 day change'].var(),
@@ -33,15 +33,36 @@ if __name__ == '__main__':
             'name': row.Name,
             'sector': row.Sector
         }, ignore_index=True)
-        df['volatility score'] = \
-            (0.1 * df['daily variance']) + \
-            (0.1 * df['weekly variance']) + \
-            (0.3 * df['1 month variance']) + \
-            (0.5 * df['3 month variance'])
+        index_df['volatility score'] = \
+            (0.1 * index_df['daily variance']) + \
+            (0.1 * index_df['weekly variance']) + \
+            (0.3 * index_df['1 month variance']) + \
+            (0.5 * index_df['3 month variance'])
 
-    df = df.sort_values(by='volatility score', ascending=True)
-
+        index_df = index_df.sort_values(by='volatility score', ascending=True)
     with open('./data/low_vol_index_out.csv', 'w') as outfile:
-        df.to_csv(outfile)
+        index_df.to_csv(outfile)
 
-    # import pudb; pudb.set_trace()
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser('Description tools for creation custom indexes of Toronto Stock Exchange listings.')
+    parser.add_argument('--download-data', '-d',
+                        dest='download_data',
+                        action='store_true',
+                        help='Downloads listing prices and dividend data from various sources.')
+    parser.add_argument('--index', '-i',
+                        dest='index',
+                        help='The name of the index to build')
+    args = parser.parse_args()
+
+    if args.download_data:
+        # Add dividend data to listings data
+        loaders.generate_preprocessed_listings()
+
+        # Download price data for each holding
+        loaders.download_all_prices()
+
+    index_name = args.index
+    if index_name:
+        if index_name == 'low-volatility':
+            build_low_volatility_index()
