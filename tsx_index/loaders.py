@@ -10,7 +10,6 @@ ROOT_PATH = dirname(dirname(abspath(__file__)))
 def get_raw_listings_df():
     """
     Gets the raw listing data from the .xlsx file downloaded on the TMX discovery tool page
-
     :return: DataFrame
     """
     with open(os.path.join(ROOT_PATH, 'data/mig_report.xlsx')) as infile:
@@ -29,7 +28,6 @@ def get_raw_listings_df():
 def get_preprocessed_listings_df():
     """
     Gets the preprocessed listing (raw + dividends) data from the saved .csv file
-
     :return: DataFrane
     """
     with open(os.path.join(ROOT_PATH, 'data/preprocessed_listings.csv'), 'r') as infile:
@@ -38,10 +36,9 @@ def get_preprocessed_listings_df():
     return listings_df
 
 
-def generate_preprocessed_listings():
+def add_dividend_payment_data():
     """
     Adds dividend data to raw listings and saves to a CSV
-
     :return: None
     """
     raw_listings_df = get_raw_listings_df()
@@ -52,8 +49,37 @@ def generate_preprocessed_listings():
         return pandas.Series((dividend_amount, dividend_currency, dividend_frequency))
 
     raw_listings_df[['dividend_amount', 'dividend_currency', 'dividend_frequency']] = raw_listings_df.apply(func, axis=1 )
+
     with open(os.path.join(ROOT_PATH, 'data/preprocessed_listings.csv'), 'w') as outfile:
-        raw_listings_df.to_csv(outfile)
+        raw_listings_df.to_csv(outfile, index=False)
+
+
+def add_dividend_yield():
+    """
+    Using the existing dividend payment data, add a column for the dividend yield based on the latest prices.
+    :return: None
+    """
+    listings_df = get_preprocessed_listings_df()
+    frequencies = {
+        'Monthly': 12,
+        'Quarterly': 4,
+        'Semi-Annual': 2,
+        'Annual': 1
+    }
+
+    def func(row):
+        symbol = web.format_symbol_for_alphavantage(row.Ticker)
+        prices = load_prices_from_csv(symbol)
+        if prices is not None:
+            last_price = prices.sort_values(by='date').iloc[-1]['close']
+            if row.dividend_frequency in frequencies:
+                return row.dividend_amount * frequencies[row.dividend_frequency] / last_price
+
+        return None
+
+    listings_df['dividend_yield'] = listings_df.apply(func, axis=1 )
+    with open(os.path.join(ROOT_PATH, 'data/preprocessed_listings.csv'), 'w') as outfile:
+        listings_df.to_csv(outfile, index=False)
 
 
 def load_prices_from_csv(symbol):

@@ -6,7 +6,11 @@ import argparse
 
 def build_low_volatility_index():
     listings_df = loaders.get_preprocessed_listings_df()
-    index_df = df = pandas.DataFrame(columns=['symbol'])
+
+    # Require at least a 3% dividend yield
+    listings_df = listings_df.where(listings_df.dividend_yield >= 0.03)
+
+    index_df = pandas.DataFrame(columns=['symbol'])
     for row in listings_df.itertuples():
         symbol = web.format_symbol_for_alphavantage(row.Ticker)
 
@@ -22,7 +26,7 @@ def build_low_volatility_index():
         prices['1 day change'] = prices['adjusted close'].diff(periods=1)
         prices['5 day change'] = prices['adjusted close'].diff(periods=5) # 1 week
         prices['20 day change'] = prices['adjusted close'].diff(periods=20) # 1 month
-        prices['60 day change'] = prices['adjusted close'].diff(periods=20)  # 6 month
+        prices['60 day change'] = prices['adjusted close'].diff(periods=60)  # 6 month
 
         index_df = index_df.append({
             'symbol': symbol,
@@ -31,7 +35,9 @@ def build_low_volatility_index():
             '1 month variance': prices['20 day change'].var(),
             '3 month variance': prices['60 day change'].var(),
             'name': row.Name,
-            'sector': row.Sector
+            'sector': row.Sector,
+            'sub-sector': row._8,
+            'dividend yield': round(row.dividend_yield, 3)
         }, ignore_index=True)
         index_df['volatility score'] = \
             (0.1 * index_df['daily variance']) + \
@@ -57,10 +63,13 @@ if __name__ == '__main__':
 
     if args.download_data:
         # Add dividend data to listings data
-        loaders.generate_preprocessed_listings()
+        loaders.add_dividend_payment_data()
 
         # Download price data for each holding
         loaders.download_all_prices()
+
+        # Calculate dividend yields based on latest prices
+        loaders.add_dividend_yield()
 
     index_name = args.index
     if index_name:
