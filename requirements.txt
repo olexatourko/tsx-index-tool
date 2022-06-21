@@ -2,7 +2,7 @@ beautifulsoup4==4.6.3
 certifi==2018.10.15
 chardet==3.0.4
 idna==2.7
-numpy==1.15.3
+numpy==1.22.0
 pandas==0.23.4
 pudb==2018.1
 Pygments==2.2.0
